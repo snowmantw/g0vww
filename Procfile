@@ -1,1 +1,1 @@
-apis: node apis.js
+web: node apis.js
