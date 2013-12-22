@@ -21,7 +21,9 @@
   "homepage": "https://github.com/snowmantw/g0vww",
   "dependencies": {
     "logfmt": "~0.18.1",
-    "express": "~3.4.7"
+    "express": "~3.4.7",
+    "neo4j": "~1.1.0",
+    "q": "~0.9.7"
   },
   "engines": {
     "node": ">=0.10.0"

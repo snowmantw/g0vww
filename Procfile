@@ -1,1 +1,1 @@
-web: node apis.js
+web: node --harmony apis.js
