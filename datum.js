@@ -1,16 +1,17 @@
 (function()
 {
-  var uuid = require('node-uuid'),
-      url  = require('url'),
-      http = require('http'),
-      q    = require('q')
+  var uuid  = require('node-uuid'),
+      url   = require('url'),
+      http  = require('http'),
+      https = require('https'),
+      q     = require('q')
   /**
    * Create a Datum.
    *
    * @param {object} instance - If instance from existing data
    * @constructor
    */
-  var Datum = function()
+  var Datum = function(instance)
   {
     if (!instance)
     {
@@ -18,7 +19,7 @@
     }
     else
     {
-      for (var i in Connection.prototype)
+      for (var i in Datum.prototype)
       {
         this[i] = instance[i]
       }
@@ -50,24 +51,31 @@
 
   Datum.prototype.read = function()
   {
+    var deferred = q.defer()
     this.atime = Date.now()
 
     if ('' !== this.proxy)
       return this._readProxy()
     else
-      return this.content
+    {
+      deferred.resolve(this.content)
+      return deferred.promise
+    }
   }
 
   Datum.prototype.write = function(content)
   {
+    var deferred = q.defer()
     if ('' !== this.proxy)
-      this._writeProxy(content)
+      return this._writeProxy(content)
     else
+    {
       this.content = content
-
-    this.ctime =
-    this.mtime =
-    Date.now()
+      deferred.resolve()
+      this.ctime =
+      this.mtime = Date.now()
+      return deferred.promise
+    }
   }
 
   /**
@@ -75,15 +83,15 @@
    *
    * @return {Promise} - With the result
    */
-  Datum._readProxy = function()
+  Datum.prototype._readProxy = function()
   {
     if (!this._urlProxy)
       this._urlProxy = url.parse(this.proxy)
 
     var deferred = q.defer(),
-        request  = '80' === this._urlProxy.port ?
-                  http.request :
-                  https.request,
+        request  = 'http:' === this._urlProxy.protocol ?
+                   http.request :
+                   https.request,
         options  =
         { host: this._urlProxy.hostname
         , port: this._urlProxy.port || '80'
@@ -119,16 +127,17 @@
    * @param {object} content - Data would be encoded & put
    * @return {Promise}
    */
-  Datum._writeProxy = function(content)
+  Datum.prototype._writeProxy = function(content)
   {
     if (!this._urlProxy)
       this._urlProxy = url.parse(this.proxy)
 
-    var deferred = q.defer(),
+    var self     = this,
+        deferred = q.defer(),
         encData  = JSON.stringify(content),
-        request  = '80' === this._urlProxy.port ?
-                  http.request :
-                  https.request,
+        request  = 'http:' === this._urlProxy.protocol ?
+                   http.request :
+                   https.request,
         options  =
         { host: this._urlProxy.hostname
         , port: this._urlProxy.port || '80'
@@ -146,6 +155,9 @@
           })
           res.on('end', function()
           {
+            self.ctime =
+            self.mtime = Date.now()
+
             // In fact, write doesn't require response.
             // This is only for debugging.
             var data = JSON.parse(output)
