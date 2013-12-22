@@ -1,3 +1,24 @@
+/**
+ * Define our node in the graph.
+ * Each Datum would holds read and write methods,
+ * which would return Promise.
+ *
+ * Note: the `then()` function of Promise require a
+ * standalone function, so methods should be bound to
+ * access the correct instance:
+ *
+ *    var Datum = require('./datum.js'),
+ *        d = new Datum(),
+ *        p = d.write({'hub': 3.14, 'foo': 'abc'}),
+ *    
+ *    p.then(d.read.bind(d))    // Need `bind`.
+ *     .then(function(data){console.dir(data)}).done()
+ *
+ * To return Promises, rather than result while the datum
+ * performs reading or writing, is because some datum may
+ * only be a proxy of the read datum, which would need to
+ * access remote server, and it would be asynchronous.
+ */
 (function()
 {
   var uuid  = require('node-uuid'),
@@ -5,10 +26,11 @@
       http  = require('http'),
       https = require('https'),
       q     = require('q')
+
   /**
    * Create a Datum.
    *
-   * @param {object} instance - If instance from existing data
+   * @param {object} instance - (Optional) if instance from existing data
    * @constructor
    */
   var Datum = function(instance)
@@ -49,6 +71,12 @@
   , _urlProxy: null
   }
 
+  /**
+   * Read a datum's content.
+   *
+   * @return {Promise} - With the content it holds.
+   * @this {Datum}
+   */
   Datum.prototype.read = function()
   {
     var deferred = q.defer()
@@ -63,6 +91,13 @@
     }
   }
 
+  /**
+   * Write something as the datum's content.
+   *
+   * @param {object}   - The data. JSON must be able to encode it.
+   * @return {Promise} - With nothing.
+   * @this {Datum}
+   */
   Datum.prototype.write = function(content)
   {
     var deferred = q.defer()
