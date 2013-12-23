@@ -23,23 +23,21 @@
               new neo4j.GraphDatabase(process.env.NEO4J_URL) :
               new neo4j.GraphDatabase('http://localhost:7474')
 
-    // It's our last step to setup, so we return its Promise directly.
     return this._setupPrimaryNodes()
+      .then(function() {return this.db})
   }
 
   /**
    * @namespace Database.prototype
    * @property {GraphDatabase} db - The instance of the database.
-   * @property {object} primaryNodes - Name and the instance of primary nodes.
-   *                                   Because of they're immutable, primary
-   *                                   nodes can be stored in references.
+   * @property {object} primaryNodes - Name and the ID of primary nodes.
    */
   Database.prototype =
   {
     db: null,
     primaryNodes:
     {
-      __compact__: ''
+      compact: '__compact__'
     }
   }
 
@@ -47,17 +45,22 @@
    * Delete all postponed deletion nodes.
    * This would clear all related nodes and there's no way to undo that.
    *
-   * @return {Promise} - With the database instance.
+   * @return {Promise} - With the query result: empty.
    * @this {Database}
    */
   Database.prototype.compact = function()
   {
+    var query = q.nbind(this.db.query, this.db)
+    var qstr = [ 'MATCH ({id: "%ID_COMPACT"})<-[:SUBSET]-(n)'
+               , 'DELETE n'
+               ].join('\n').replace('%ID_COMPACT', primaryNodes.compact)
+    return query(qstr)
   }
 
   /**
    * Set up primary nodes like '__compact__' .
    *
-   * @return {Promise}   - With the database instance.
+   * @return {Promise} - With the query result: empty.
    * @this {Database}
    */
   Database.prototype._setupPrimaryNodes = function()
@@ -66,7 +69,7 @@
     var qchain = null
 
     // TODO: I can't find a good way to execute multiple queries at once...
-    ['__compact__'].forEach(function(id)
+    Object.keys(this.primaryNodes).forEach(function(id)
     {
       var qstr = 'MATCH (n:Primary {id: "%ID"})'.replace('%ID', id)
       var pm = query(qstr)
