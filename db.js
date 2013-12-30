@@ -23,7 +23,7 @@
               new neo4j.GraphDatabase(process.env.NEO4J_URL) :
               new neo4j.GraphDatabase('http://localhost:7474')
 
-    return this._setupPrimaryNodes()
+    this.stages = this._setupPrimaryNodes()
       .then(function() {return this.db})
   }
 
@@ -35,6 +35,7 @@
   Database.prototype =
   {
     db: null,
+    stages: null,
     primaryNodes:
     {
       compact: '__compact__'
@@ -54,7 +55,65 @@
     var qstr = [ 'MATCH ({id: "%ID_COMPACT"})<-[:SUBSET]-(n)'
                , 'DELETE n'
                ].join('\n').replace('%ID_COMPACT', primaryNodes.compact)
-    return query(qstr)
+    var pm = query(qstr)
+    this.stages = this.stages.then(pm)
+    return pm
+  }
+
+  /**
+   * Insert nodes and paths. It's directive.
+   *
+   * @param {Object} data - `[{JSON: [{Relation: {JSON: label}}], 'label': ''}]`
+   * @return {Promise} - With the empty result.
+   * @this {Database}
+   */
+  Database.prototype.insert = function(data)
+  {
+    var query = q.nbind(this.db.query, this.db)
+    var qchain = null
+
+    // Can't find a good way to create unique nodes in batch mode.
+    // 1. Create the node if it doesn't exist
+    // 2. Match the rel node
+    data.forEach(function(e)
+    {
+      // Give default label if it doesn't exist.
+      var labelFrom = e.label ? e.label : 'Datum'
+         ,enc_from  = Object.keys(e)
+                    .filter(function(k) {return 'label' !== k})[0]
+         ,from = eval('from = ' + enc_from) // no JSON because the "'" issue...
+         ,rels = e[enc_from]
+         ,qstr = 'MERGE (n:%LABEL %DATUM)'
+               .replace('%LABEL', labelFrom)
+               .replace('%DATUM', enc_from)
+         ,pm = query(qstr)
+
+      if (!qchain)
+        qchain = pm
+
+      rels.forEach(function(rel)
+      {
+        var relation  = Object.keys(rel)[0]
+           ,target    = rel[relation]
+           ,enc_to    = Object.keys(target)[0]
+           ,from      = eval('to = ' + enc_from)
+           ,labelTo   = to[enc_to] ? to[enc_to] : 'Datum'
+           ,qstrRel   = [ 'MATCH (n:%LABEL_FROM {id: %ID_FROM})'
+                        , 'CREATE UNIQUE (n)-[:%RELATION]->(m:%LABEL_TO %TO)'
+                        , 'RETURN ""']
+                      .join('\n')
+                      .replace('%LABEL_FROM', labelFrom)
+                      .replace('%ID_FROM', from.id)
+                      .replace('%RELATION', relation)
+                      .replace('%LABEL_TO', labelTo)
+                      .replace('%TO',enc_to)
+           ,pmRel     = query(qstrRel)
+
+        qchain = qchain.then(pmRel)
+      })
+    })
+    this.stages = this.stages.then(qchain)
+    return qchain
   }
 
   /**
@@ -71,7 +130,7 @@
     // TODO: I can't find a good way to execute multiple queries at once...
     Object.keys(this.primaryNodes).forEach(function(id)
     {
-      var qstr = 'MATCH (n:Primary {id: "%ID"})'.replace('%ID', id)
+      var qstr = 'MERGE (n:Primary {id: "%ID"})'.replace('%ID', id)
       var pm = query(qstr)
       if (!qchain)
         qchain = pm

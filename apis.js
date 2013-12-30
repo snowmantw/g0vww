@@ -77,6 +77,9 @@
       .then(function() {res.send('{"data": ""')})
       .done()
     })
+    app.all('*', function(req, res) {
+      res.send(403)
+    })
     var port = process.env.PORT || 5000
     app.listen(port, function()
     {
