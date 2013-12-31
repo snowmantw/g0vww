@@ -61,6 +61,27 @@
   }
 
   /**
+   * Match the datum to delete all old versions.
+   *
+   * @return {Promist} - With the empty result
+   * @this {Database}
+   */
+  Database.prototype._updateNewest = function(target, label)
+  {
+    var query  = q.nbind(this.db.query, this.db)
+       ,labstr = e.label ? label : 'Datum'
+       ,allvar = ['MATCH (r:%LABSTR %TARGET)'
+                 ,'WITH max(r.timestamp) as m'
+                 ,'MATCH (old:Datum {newest:true}),(new:Datum {timestamp:m})'
+                 ,'SET new._newest = true,old._newest = false'
+                 ,'RETURN ""'].join('\n')
+               .replace('%LABSTR', labstr)
+               .replace('%TARGET', target)
+       ,pm     = query(allver)
+    return pm
+  }
+
+  /**
    * Simplest read: from a node (in JSON) to other nodes.
    * For example, `{id: 1}-[:KNOW]->{id:2}->[:KNOW]->{id:3}`
    * would be 
@@ -70,6 +91,8 @@
    */
   Database.prototype.read = function(from, rel, depth)
   {
+    // Update the newest node while reading first.
+    var pmUpdate = this._updateNewest(from)
     var query  = q.nbind(this.db.query, this.db)
        ,depstr = '*' === depth ? '' : depth
        ,relstr = '*' === rel ?
@@ -83,8 +106,8 @@
                .replace('%FROM', from)
                .replace('%RELSTR', relstr)
     var pm = query(qstr)
-    this.stages = this.stages.then(pm)
-    return pm
+    this.stages = this.stages.then(pmUpdate).then(pm)
+    return pmUpdate.then(pm)
   }
 
   /**
