@@ -60,9 +60,31 @@
     return pm
   }
 
-  Database.prototype.read = function()
+  /**
+   * Simplest read: from a node (in JSON) to other nodes.
+   * For example, `{id: 1}-[:KNOW]->{id:2}->[:KNOW]->{id:3}`
+   * would be 
+   *
+   * @return {Promise} - With the result named 'to', Array<Node>
+   * @this {Database}
+   */
+  Database.prototype.read = function(from, rel, depth)
   {
-
+    var query  = q.nbind(this.db.query, this.db)
+       ,depstr = '*' === depth ? '' : depth
+       ,relstr = '*' === rel ?
+                 '[]' :
+                 '[:%RELATION*1..%DEPTH]'
+                 .replace('%RELATION', rel)
+                 .replace('%DEPTH', depstr)
+       ,qstr   = [ 'MATCH (n %FROM)-%RELSTR->(to)'
+                 , 'RETURN to'
+                 ].join('\n')
+               .replace('%FROM', from)
+               .replace('%RELSTR', relstr)
+    var pm = query(qstr)
+    this.stages = this.stages.then(pm)
+    return pm
   }
 
   /**
