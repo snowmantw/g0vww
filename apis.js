@@ -5,7 +5,7 @@
      ,uuid    = require('node-uuid')
      ,express = require('express')
      ,logfmt  = require('logfmt')
-     ,db      = require(__dirname + '/db.js')
+     ,db      = new require(__dirname + '/db.js')
      ,app     = express()
      ,states  = {}
      ,actions = {}
@@ -21,12 +21,10 @@
 
   streamIn.push = function(apikey, data)
   {
-    var defer = q.defer()
-    // TODO: write these data to the db.
-    // TODO: If push too much data, and make the response
-    // time too long, it may timeout here.
-    defer.resolve()
-    return defer
+    // TODO
+    // How can we combine the key with data,
+    // to recognize the data's source?
+    return db.insert(data)
   }
 
   actions.main = function()

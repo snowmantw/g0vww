@@ -60,8 +60,17 @@
     return pm
   }
 
+  Database.prototype.read = function()
+  {
+
+  }
+
   /**
    * Insert nodes and paths. It's directive.
+   * Please note because detect duplicate and update nodes is expensive,
+   * so here would create new nodes even the old ones exist.
+   * And the reader should distinguish them with timestamps.
+   * (Reader should delete old nodes by comparing all existing nodes)
    *
    * @param {Object} data - `[{JSON: [{Relation: {JSON: label}}], 'label': ''}]`
    * @return {Promise} - With the empty result.
@@ -81,11 +90,15 @@
       var labelFrom = e.label ? e.label : 'Datum'
          ,enc_from  = Object.keys(e)
                     .filter(function(k) {return 'label' !== k})[0]
-         ,from = eval('from = ' + enc_from) // no JSON because the "'" issue...
+         ,qry_from  = enc_from            // Cypher disallow objects with '"'
+                    .replace(/":/g,':')
+                    .replace(/{"/g,'{')
+                    .replace(/,"/g,',')
+         ,from = JSON.parse(enc_from)
          ,rels = e[enc_from]
          ,qstr = 'MERGE (n:%LABEL %DATUM)'
                .replace('%LABEL', labelFrom)
-               .replace('%DATUM', enc_from)
+               .replace('%DATUM', qry_from)
          ,pm = query(qstr)
 
       if (!qchain)
@@ -96,7 +109,11 @@
         var relation  = Object.keys(rel)[0]
            ,target    = rel[relation]
            ,enc_to    = Object.keys(target)[0]
-           ,from      = eval('to = ' + enc_from)
+           ,qry_to    = enc_to            // Cypher disallow objects with '"'
+                      .replace(/":/g,':')
+                      .replace(/{"/g,'{')
+                      .replace(/,"/g,',')
+           ,to        = JSON.parse(enc_to)
            ,labelTo   = to[enc_to] ? to[enc_to] : 'Datum'
            ,qstrRel   = [ 'MATCH (n:%LABEL_FROM {id: %ID_FROM})'
                         , 'CREATE UNIQUE (n)-[:%RELATION]->(m:%LABEL_TO %TO)'
@@ -106,7 +123,7 @@
                       .replace('%ID_FROM', from.id)
                       .replace('%RELATION', relation)
                       .replace('%LABEL_TO', labelTo)
-                      .replace('%TO',enc_to)
+                      .replace('%TO',qry_to)
            ,pmRel     = query(qstrRel)
 
         qchain = qchain.then(pmRel)
